@@ -1,15 +1,18 @@
 const { Telegraf, Markup } = require('telegraf');
 
 const token = process.env.BOT_TOKEN;
-// 🔴 IMP: Apna ID yahan dalein
+
+// ✅ UPDATED DETAILS
 const ADMIN_ID = 5265106993; 
+const CHANNEL_LINK = "https://t.me/navyaastra"; 
 
 const bot = new Telegraf(token || 'TOKEN_MISSING');
 
-// --- VARIABLES ---
-let userList = new Set();
-let qrFileId = null;
-let adminState = null;
+// --- DATABASE (Temporary Memory) ---
+// Note: In Vercel (Serverless), this resets on redeploy. 
+// For permanent storage, we usually need a database like MongoDB.
+let userList = new Set(); 
+let waitlist = new Set(); 
 
 // --- MIDDLEWARE ---
 bot.use((ctx, next) => {
@@ -18,177 +21,130 @@ bot.use((ctx, next) => {
 });
 
 // --- ADMIN COMMANDS ---
-bot.command('setqr', (ctx) => {
-    if (ctx.from.id != ADMIN_ID) return ctx.reply("❌ Access Denied.");
-    adminState = 'WAITING_FOR_QR';
-    ctx.reply("📸 Please send your **Payment QR Code** (Photo).");
-});
 
+// 1. BROADCAST (To send updates to everyone)
 bot.command('broadcast', async (ctx) => {
     if (ctx.from.id != ADMIN_ID) return ctx.reply("❌ Access Denied.");
+    
     const message = ctx.message.text.split(' ').slice(1).join(' ');
-    if (!message) return ctx.reply("⚠️ Format: `/broadcast Your Message`");
+    if (!message) return ctx.reply("⚠️ Format: `/broadcast We are launching soon!`");
     
     let count = 0;
-    ctx.reply(`📢 Broadcasting...`);
+    ctx.reply(`📢 Sending Updates to ${userList.size} users...`);
+    
     for (const userId of userList) {
         try {
-            await bot.telegram.sendMessage(userId, `📢 *Announcement:*\n\n${message}`, { parse_mode: 'Markdown' });
+            await bot.telegram.sendMessage(userId, `📢 *Navya Astra Update:*\n\n${message}`, { parse_mode: 'Markdown' });
             count++;
         } catch (error) {}
     }
-    ctx.reply(`✅ Sent to ${count} users.`);
+    ctx.reply(`✅ Update Sent to ${count} users.`);
+});
+
+// 2. REPLY (To reply to a specific user)
+bot.command('reply', (ctx) => {
+    if (ctx.from.id != ADMIN_ID) return;
+    
+    const parts = ctx.message.text.split(' ');
+    if (parts.length < 3) return ctx.reply("⚠️ Format: `/reply UserID Message`");
+    
+    const userId = parts[1];
+    const msg = parts.slice(2).join(' ');
+    
+    bot.telegram.sendMessage(userId, `👨‍💻 *Message from Founder:*\n\n${msg}`, { parse_mode: 'Markdown' })
+        .then(() => ctx.reply("✅ Sent!"))
+        .catch(() => ctx.reply("❌ Failed. ID might be wrong."));
 });
 
 // --- MAIN MENU ---
 const showMainMenu = (ctx) => {
-    const welcomeText = `Hello Boss! 🙏\nWelcome to *Navya Astra*.\n\nWe build Software, Apps & AI Solutions for your Business. 🚀\n\nHow can we help you today?`;
+    const welcomeText = `🚀 *Welcome to Navya Astra Development*\n\nWe are building the Future.\n\nWe are developing Next-Gen **Social Media Platforms** & **Utility Apps**.\n\n⚠️ Status: *Currently in Development (Processing)*\n\n👇 Explore our Vision:`;
     
     const mainKeyboard = Markup.inlineKeyboard([
-        // Row 1: Services & Portfolio (Work Samples)
-        [Markup.button.callback('🚀 Our Services', 'menu_services'), Markup.button.callback('📂 Our Work / Portfolio', 'menu_portfolio')],
-        // Row 2: Quote (Leads) & Payment
-        [Markup.button.callback('📝 Start a Project', 'menu_quote'), Markup.button.callback('💰 Pay Now / QR', 'menu_pay')],
-        // Row 3: Info & Support
-        [Markup.button.callback('⭐ Client Reviews', 'menu_reviews'), Markup.button.callback('📞 Contact Support', 'menu_support')]
+        // Row 1: Vision & Projects
+        [Markup.button.callback('🌐 Our Upcoming Projects', 'menu_projects'), Markup.button.callback('🗺️ Roadmap / Progress', 'menu_roadmap')],
+        // Row 2: Waitlist & Community
+        [Markup.button.callback('⏳ Join Waitlist (Early Access)', 'btn_waitlist'), Markup.button.callback('📢 Join Community', 'btn_community')],
+        // Row 3: Collaboration & Contact
+        [Markup.button.callback('🤝 Partner / Invest', 'menu_partner'), Markup.button.callback('🗣️ Talk to Founder', 'menu_contact')]
     ]);
 
     if (ctx.callbackQuery) {
-        ctx.editMessageText(welcomeText, { parse_mode: 'Markdown', ...mainKeyboard }).catch(e=>console.log(e));
+        ctx.editMessageText(welcomeText, { parse_mode: 'Markdown', ...mainKeyboard }).catch(e=>{});
     } else {
-        ctx.replyWithMarkdown(welcomeText, mainKeyboard).catch(e=>console.log(e));
+        ctx.replyWithMarkdown(welcomeText, mainKeyboard).catch(e=>{});
     }
 };
 
 bot.start((ctx) => showMainMenu(ctx));
 
-// --- SUB-MENUS ---
+// --- SECTIONS ---
 
-// A. TECH SERVICES (Only Business Tech)
-bot.action('menu_services', (ctx) => {
-    ctx.editMessageText(`🛠 *Navya Astra Services:*\n\nWe specialize in:`, {
+// 1. PROJECTS SHOWCASE
+bot.action('menu_projects', (ctx) => {
+    ctx.editMessageText(`🌐 *Navya Astra Projects (In Pipeline)*\n\n1️⃣ **Project "SocialX" (Name TBD)**\nℹ️ *Concept:* A decentralized social platform focused on privacy and real connections.\n🛠 *Status:* 40% Completed (Backend Development).\n\n2️⃣ **Project "Fan-Utility"**\nℹ️ *Concept:* Tools for Creators to manage fanbase and monetization.\n🛠 *Status:* Planning Phase.\n\n👇 Click 'Join Waitlist' to be the first to test!`, {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
-            [Markup.button.callback('📱 App Development', 'srv_app'), Markup.button.callback('💻 Web Development', 'srv_web')],
-            [Markup.button.callback('🤖 Telegram Bots', 'srv_bot'), Markup.button.callback('🧠 AI & Automation', 'srv_ai')],
+            [Markup.button.callback('⏳ Join Beta Waitlist', 'btn_waitlist')],
             [Markup.button.callback('🔙 Back', 'btn_back')]
         ])
     });
 });
 
-// B. PORTFOLIO (New Section - Replaces Trading)
-bot.action('menu_portfolio', (ctx) => {
-    ctx.editMessageText(`📂 *Our Recent Projects:*\n\n1. **E-commerce App:** Full Android/iOS Store for a Retail Brand.\n2. **Business Website:** SEO Optimized site for a Real Estate Agency.\n3. **Customer Support Bot:** Automated handling for 500+ users.\n\nWant to see demos? Contact us!`, {
+// 2. ROADMAP (Progress)
+bot.action('menu_roadmap', (ctx) => {
+    ctx.editMessageText(`🗺️ *Development Roadmap 2026*\n\n✅ **Q1 (Jan-Mar):** Core Architecture Design.\n🔄 **Q2 (Apr-Jun):** Alpha Testing (Internal Team).\n🔜 **Q3 (Jul-Sep):** Public Beta Launch (Waitlist Users).\n🔜 **Q4 (Oct-Dec):** Global Launch 🚀\n\nWe are currently in *Phase 1*.`, {
         parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-            [Markup.button.callback('📝 Get a Similar Project', 'menu_quote')],
-            [Markup.button.callback('🔙 Back', 'btn_back')]
-        ])
+        ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Back', 'btn_back')]])
     });
 });
 
-// C. PAYMENT (QR)
-bot.action('menu_pay', (ctx) => {
-    if (qrFileId) {
-        ctx.replyWithPhoto(qrFileId, { caption: `💰 *Scan to Pay*\n\nSecure payment via Navya Astra Business Account.\nPlease send a screenshot after payment.` , parse_mode: 'Markdown'});
-    } else {
-        ctx.reply(`⚠️ Admin has not set the QR Code yet.`);
-    }
-});
-
-// D. REVIEWS (Pure Tech Reviews)
-bot.action('menu_reviews', (ctx) => {
-    const reviewText = `⭐ *What Clients Say:*\n\n👤 *Rahul S. (CEO)*\n"Navya Astra built our company website in record time. Professional and clean code." ⭐⭐⭐⭐⭐\n\n👤 *Vikram J. (Startup Founder)*\n"Best App Developers! They understood my vision perfectly." ⭐⭐⭐⭐⭐`;
-    ctx.editMessageText(reviewText, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Back', 'btn_back')]]) });
-});
-
-// E. SUPPORT
-bot.action('menu_support', (ctx) => {
-    ctx.editMessageText(`📞 *Contact Support:*`, {
-        parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-            [Markup.button.callback('💬 Chat with Admin', 'cnt_chat'), Markup.button.callback('📧 Email Us', 'cnt_email')],
-            [Markup.button.callback('🔙 Back', 'btn_back')]
-        ])
-    });
-});
-
-// --- SMART QUOTE SYSTEM (LEAD GEN) ---
-bot.action('menu_quote', (ctx) => {
-    ctx.editMessageText(`🚀 *Start Your Project*\n\nLet's build something amazing. First, select your **Budget Range**:`, {
-        parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-            [Markup.button.callback('₹5k - ₹15k', 'qt_bud_low'), Markup.button.callback('₹15k - ₹50k', 'qt_bud_mid')],
-            [Markup.button.callback('₹50k+', 'qt_bud_high'), Markup.button.callback('🔙 Cancel', 'btn_back')]
-        ])
-    });
-});
-
-const handleBudget = (ctx, budget) => {
-    ctx.editMessageText(`✅ Budget: ${budget}\n\n**When do you need this project delivered?**`, {
-        parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-            [Markup.button.callback('Urgent (3-5 Days)', `qt_time_urg_${budget}`)],
-            [Markup.button.callback('Standard (1-2 Weeks)', `qt_time_flx_${budget}`)],
-        ])
-    });
-};
-
-bot.action('qt_bud_low', (ctx) => handleBudget(ctx, 'Low (5-15k)'));
-bot.action('qt_bud_mid', (ctx) => handleBudget(ctx, 'Mid (15-50k)'));
-bot.action('qt_bud_high', (ctx) => handleBudget(ctx, 'High (50k+)'));
-
-bot.action(/qt_time_(.+)/, async (ctx) => {
-    const data = ctx.match[1].split('_');
-    const urgency = data[0] === 'urg' ? 'Urgent' : 'Standard';
-    const budget = data[1]; 
-    const user = ctx.from.first_name;
-    const handle = ctx.from.username ? `@${ctx.from.username}` : "No Username";
-
-    await ctx.editMessageText(`✅ **Request Sent!**\nOur technical team will analyze your requirements and contact you shortly.`);
+// 3. WAITLIST SYSTEM
+bot.action('btn_waitlist', (ctx) => {
+    const user = ctx.from;
     
-    if (ADMIN_ID) {
-        bot.telegram.sendMessage(ADMIN_ID, `🔔 *New Project Lead (Tech)*\n\n👤 *Client:* ${user} (${handle})\n💰 *Budget:* ${budget}\n⏳ *Timeline:* ${urgency}`, { parse_mode: 'Markdown' });
+    if (waitlist.has(user.id)) {
+        return ctx.reply("✅ You are already on the list! We will notify you at launch.");
     }
+    
+    waitlist.add(user.id);
+    
+    // Notify Admin
+    bot.telegram.sendMessage(ADMIN_ID, `🎉 *New Waitlist Sign-up!*\n👤 ${user.first_name} (@${user.username})\n🆔 \`${user.id}\``, { parse_mode: 'Markdown' });
+    
+    ctx.replyWithMarkdown(`🎉 *Congratulations!*\n\nYou have been added to the **Navya Astra Exclusive Waitlist**.\nYou will get **Early Access** to our Social Media App before anyone else! 🚀`);
 });
 
-// --- DETAILS & HANDLERS ---
-bot.action('srv_app', (ctx) => ctx.reply('📱 **App Development:**\nNative Android (Kotlin/Java) & iOS Apps.\nStarting @ ₹15,000.'));
-bot.action('srv_web', (ctx) => ctx.reply('💻 **Web Development:**\nBusiness Websites, E-commerce, & Portfolios.\nStarting @ ₹5,000.'));
-bot.action('srv_bot', (ctx) => ctx.reply('🤖 **Telegram Bots:**\nAutomation, Group Management, & Shop Bots.\nStarting @ ₹2,000.'));
-bot.action('srv_ai', (ctx) => ctx.reply('🧠 **AI Solutions:**\nChatGPT Integration, Custom AI Tools.'));
+// 4. PARTNER / INVEST
+bot.action('menu_partner', (ctx) => {
+    ctx.editMessageText(`🤝 *Collaboration*\n\nNavya Astra is open for:\n- **Developers:** React/Node.js experts.\n- **Investors:** Seed funding opportunities.\n\nIf you want to contribute, please contact the Founder.`, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+            [Markup.button.callback('🗣️ Contact Founder', 'menu_contact')],
+            [Markup.button.callback('🔙 Back', 'btn_back')]
+        ])
+    });
+});
 
-bot.action('cnt_chat', (ctx) => ctx.reply('Direct Message: @Raj_Tiwari_Official'));
-bot.action('cnt_email', (ctx) => ctx.reply('Email: contact@navyaastra.com'));
+// 5. CONTACT & COMMUNITY
+bot.action('menu_contact', (ctx) => {
+    ctx.reply("📞 **Founder Contact:**\n\nDirect Message: @Raj_Tiwari_Official\nEmail: contact@navyaastra.com\n\n(Projects are in processing, please be patient!)");
+});
+
+bot.action('btn_community', (ctx) => {
+    ctx.reply(`📢 *Join Official Channel:*\n\nGet latest updates here:\n${CHANNEL_LINK}`);
+});
+
 bot.action('btn_back', (ctx) => showMainMenu(ctx));
 
-bot.on('photo', (ctx) => {
-    if (ctx.from.id == ADMIN_ID && adminState === 'WAITING_FOR_QR') {
-        qrFileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
-        adminState = null;
-        ctx.reply("✅ QR Code Set Successfully!");
-    }
-});
-
-bot.on('text', async (ctx) => {
-    if (adminState) return;
-    const userMsg = ctx.message.text;
-    if (userMsg.startsWith('/')) return;
-
-    if (ADMIN_ID) {
-        bot.telegram.sendMessage(ADMIN_ID, `🔔 *New Message*\n👤: ${ctx.from.first_name}\n💬: ${userMsg}`);
-        ctx.reply("Message received! We will reply shortly. ✅");
-    }
-});
-
-// --- SERVER ---
+// --- SERVER SETUP ---
 module.exports = async (req, res) => {
     try {
         if (req.method === 'POST') {
             await bot.handleUpdate(req.body);
             res.status(200).send('OK');
         } else {
-            res.status(200).send('Navya Astra Tech Bot is Live 🟢');
+            res.status(200).send('Navya Astra Development Bot 🟢');
         }
     } catch (e) {
         res.status(500).send('Error');
